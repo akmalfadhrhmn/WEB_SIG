@@ -168,6 +168,39 @@ PROJEK_SIG/
 
 Semua tabel menggunakan **SRID 4326** (WGS84) untuk geometry.
 
+## 🔄 Refresh Database (Update Data)
+
+Jika Anda mengubah data GeoJSON atau ingin mengimpor ulang data:
+
+### Cara 1: Truncate & Re-import (Recommended)
+```bash
+# Di Terminal Laragon
+cd C:\laragon\www\PROJEK_SIG
+
+# Hapus semua data (tapi tetap struktur tabel)
+mysql -u root -e "USE webgis_pendidikan; TRUNCATE TABLE sekolah; TRUNCATE TABLE kecamatan; TRUNCATE TABLE kecamatan_analisis;"
+
+# Import ulang data
+php database\import_geojson.php
+```
+
+### Cara 2: Menggunakan HeidiSQL
+1. Buka HeidiSQL di Laragon
+2. Pilih database `webgis_pendidikan`
+3. Klik kanan tabel → **Empty** (untuk menghapus data) atau **Drop** (untuk hapus tabel)
+4. Jika drop tabel, import ulang schema: `File` → `Load SQL file...` → pilih `database/schema.sql`
+5. Import data: Jalankan `php database\import_geojson.php` di terminal
+
+### Cara 3: Drop & Recreate Database
+```bash
+# Hapus database dan buat ulang
+mysql -u root -e "DROP DATABASE IF EXISTS webgis_pendidikan;"
+mysql -u root < database\schema.sql
+php database\import_geojson.php
+```
+
+**Catatan:** Setelah refresh database, refresh browser (F5) untuk melihat perubahan.
+
 ## ⚠️ Troubleshooting
 
 ### Error Koneksi Database
@@ -185,6 +218,7 @@ Semua tabel menggunakan **SRID 4326** (WGS84) untuk geometry.
 - Cek data di HeidiSQL: `SELECT COUNT(*) FROM sekolah;`
 - Cek console browser (F12)
 - Cek Network tab untuk error API
+- **Refresh database** jika data sudah diubah (lihat bagian Refresh Database di atas)
 
 ### Laragon Specific
 - **Apache/MySQL tidak start:** Restart Laragon sebagai Administrator

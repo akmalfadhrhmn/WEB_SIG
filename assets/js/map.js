@@ -27,6 +27,8 @@ let addModeActive = false;
 let markerMap = new Map(); // Map untuk menyimpan marker dengan ID
 let currentEditingId = null;
 let mapClickHandler = null;
+let kecamatanLayerVisible = true;
+let analisisLayerVisible = true;
 
 // Icon untuk Marker Sekolah berdasarkan Jenjang
 function getIconByJenjang(jenjang) {
@@ -196,11 +198,12 @@ async function loadSekolah() {
             },
             onEachFeature: function(feature, layer) {
                 const props = feature.properties;
+                
+                // Popup tanpa kecamatan
                 const popupContent = `
                     <div style="min-width: 200px;">
                         <h3 style="margin: 0 0 10px 0; font-size: 16px; font-weight: bold;">${props.nama_sekolah}</h3>
                         <p style="margin: 5px 0;"><strong>Jenjang:</strong> ${props.jenjang}</p>
-                        ${props.kecamatan ? `<p style="margin: 5px 0;"><strong>Kecamatan:</strong> ${props.kecamatan}</p>` : ''}
                         <p style="margin: 5px 0;"><strong>Koordinat:</strong> ${props.latitude.toFixed(6)}, ${props.longitude.toFixed(6)}</p>
                         <div style="margin-top: 10px; display: flex; gap: 5px;">
                             <button onclick="editSekolah(${props.id})" style="flex: 1; padding: 5px 10px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">✏️ Edit</button>
@@ -338,6 +341,7 @@ function selectGeocodeResult(lat, lng, displayName) {
 
 // Toggle Add Mode
 function toggleAddMode() {
+    // Hapus validasi layer visibility - bisa tambah marker walaupun layer ON
     addModeActive = !addModeActive;
     const btn = document.getElementById('toggleAddModeBtn');
     const status = document.getElementById('addModeStatus');
@@ -354,11 +358,13 @@ function toggleAddMode() {
         
         // Add click handler
         if (!mapClickHandler) {
-            mapClickHandler = map.on('click', function(e) {
+            const clickHandler = function(e) {
                 if (addModeActive) {
                     openSekolahModal(null, e.latlng.lat, e.latlng.lng);
                 }
-            });
+            };
+            map.on('click', clickHandler);
+            mapClickHandler = clickHandler; // Store function reference, not the event object
         }
     } else {
         btn.textContent = '➕ Tambah Marker';
@@ -377,16 +383,64 @@ function toggleAddMode() {
     }
 }
 
+// Load Kecamatan List untuk Dropdown
+let kecamatanList = [];
+async function loadKecamatanList() {
+    try {
+        const response = await fetch('api/get_kecamatan_list.php');
+        const data = await response.json();
+        
+        if (data.success && data.kecamatan) {
+            kecamatanList = data.kecamatan;
+            
+            // Populate dropdown
+            const select = document.getElementById('kecamatanSekolah');
+            if (select) {
+                // Clear existing options except first
+                select.innerHTML = '<option value="">Pilih Kecamatan</option>';
+                
+                // Add kecamatan options
+                kecamatanList.forEach(kec => {
+                    const option = document.createElement('option');
+                    option.value = kec;
+                    option.textContent = kec;
+                    select.appendChild(option);
+                });
+            }
+        }
+    } catch (error) {
+        console.error('Error loading kecamatan list:', error);
+    }
+}
+
 // Open Modal for Create/Edit
-function openSekolahModal(id = null, lat = null, lng = null) {
+async function openSekolahModal(id = null, lat = null, lng = null) {
     const modal = document.getElementById('sekolahModal');
     const form = document.getElementById('sekolahForm');
     const title = document.getElementById('modalTitle');
     const submitBtn = document.getElementById('submitBtn');
     
+    // Pastikan dropdown kecamatan sudah ter-load
+    if (kecamatanList.length === 0) {
+        await loadKecamatanList();
+    }
+    
     // Reset form
     form.reset();
     document.getElementById('sekolahId').value = '';
+    
+    // Pastikan dropdown ter-populate
+    const kecamatanSelect = document.getElementById('kecamatanSekolah');
+    if (kecamatanSelect && kecamatanSelect.options.length <= 1) {
+        // Re-populate jika kosong
+        kecamatanSelect.innerHTML = '<option value="">Pilih Kecamatan</option>';
+        kecamatanList.forEach(kec => {
+            const option = document.createElement('option');
+            option.value = kec;
+            option.textContent = kec;
+            kecamatanSelect.appendChild(option);
+        });
+    }
     
     if (id) {
         // Edit mode
@@ -418,6 +472,9 @@ function openSekolahModal(id = null, lat = null, lng = null) {
         }
     }
     
+    // Re-enable submit button
+    submitBtn.disabled = false;
+    
     modal.classList.remove('hidden');
     
     // Disable add mode if active
@@ -428,8 +485,19 @@ function openSekolahModal(id = null, lat = null, lng = null) {
 
 // Close Modal
 function closeSekolahModal() {
-    document.getElementById('sekolahModal').classList.add('hidden');
+    const modal = document.getElementById('sekolahModal');
+    const submitBtn = document.getElementById('submitBtn');
+    
+    modal.classList.add('hidden');
     currentEditingId = null;
+    
+    // Reset submit button
+    submitBtn.disabled = false;
+    if (currentEditingId) {
+        submitBtn.textContent = 'Update';
+    } else {
+        submitBtn.textContent = 'Simpan';
+    }
 }
 
 // Create Sekolah
@@ -444,7 +512,26 @@ async function createSekolah(data) {
             body: JSON.stringify(data)
         });
         
-        const result = await response.json();
+        // Get response text first
+        const responseText = await response.text();
+        
+        // Cek jika response tidak OK
+        if (!response.ok) {
+            console.error('Response error:', responseText);
+            alert('Error: Server mengembalikan error. Cek console untuk detail.');
+            return false;
+        }
+        
+        // Try to parse JSON
+        let result;
+        try {
+            result = JSON.parse(responseText);
+        } catch (parseError) {
+            console.error('JSON Parse Error:', parseError);
+            console.error('Response was:', responseText);
+            alert('Error: Server mengembalikan response yang tidak valid. Cek console untuk detail.');
+            return false;
+        }
         
         if (result.error) {
             alert('Error: ' + result.message);
@@ -454,11 +541,12 @@ async function createSekolah(data) {
         alert('Sekolah berhasil ditambahkan!');
         closeSekolahModal();
         loadSekolah();
+        loadKecamatanAnalisis(); // Reload analisis untuk update jumlah sekolah
         loadStatistik();
         return true;
     } catch (error) {
         console.error('Create error:', error);
-        alert('Error saat menambah sekolah');
+        alert('Error saat menambah sekolah: ' + error.message);
         return false;
     } finally {
         hideLoading();
@@ -477,7 +565,26 @@ async function updateSekolah(id, data) {
             body: JSON.stringify(data)
         });
         
-        const result = await response.json();
+        // Get response text first
+        const responseText = await response.text();
+        
+        // Cek jika response tidak OK
+        if (!response.ok) {
+            console.error('Response error:', responseText);
+            alert('Error: Server mengembalikan error. Cek console untuk detail.');
+            return false;
+        }
+        
+        // Try to parse JSON
+        let result;
+        try {
+            result = JSON.parse(responseText);
+        } catch (parseError) {
+            console.error('JSON Parse Error:', parseError);
+            console.error('Response was:', responseText);
+            alert('Error: Server mengembalikan response yang tidak valid. Cek console untuk detail.');
+            return false;
+        }
         
         if (result.error) {
             alert('Error: ' + result.message);
@@ -487,19 +594,25 @@ async function updateSekolah(id, data) {
         alert('Sekolah berhasil diupdate!');
         closeSekolahModal();
         loadSekolah();
+        loadKecamatanAnalisis(); // Reload analisis untuk update jumlah sekolah
         loadStatistik();
         return true;
     } catch (error) {
         console.error('Update error:', error);
-        alert('Error saat mengupdate sekolah');
+        alert('Error saat mengupdate sekolah: ' + error.message);
         return false;
     } finally {
         hideLoading();
     }
 }
 
-// Delete Sekolah
-async function deleteSekolah(id) {
+// Edit Sekolah (called from popup) - harus di window scope agar bisa diakses dari onclick
+window.editSekolah = function(id) {
+    openSekolahModal(id);
+};
+
+// Delete Sekolah (called from popup) - harus di window scope agar bisa diakses dari onclick
+window.deleteSekolah = async function(id) {
     if (!confirm('Apakah Anda yakin ingin menghapus sekolah ini?')) {
         return;
     }
@@ -526,6 +639,7 @@ async function deleteSekolah(id) {
         }
         
         loadSekolah();
+        loadKecamatanAnalisis(); // Reload analisis untuk update jumlah sekolah
         loadStatistik();
     } catch (error) {
         console.error('Delete error:', error);
@@ -533,18 +647,14 @@ async function deleteSekolah(id) {
     } finally {
         hideLoading();
     }
-}
-
-// Edit Sekolah (called from popup)
-function editSekolah(id) {
-    openSekolahModal(id);
-}
+};
 
 // Event Listeners
 document.addEventListener('DOMContentLoaded', function() {
     // Load initial data
     loadKecamatan();
     loadKecamatanAnalisis();
+    loadKecamatanList(); // Load kecamatan list for dropdown - HARUS dipanggil di sini
     loadSekolah();
     loadStatistik();
     
@@ -595,19 +705,23 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Layer Toggle
     document.getElementById('toggleKecamatan').addEventListener('change', function(e) {
+        kecamatanLayerVisible = e.target.checked;
         if (e.target.checked) {
             map.addLayer(kecamatanLayer);
         } else {
             map.removeLayer(kecamatanLayer);
         }
+        // Hapus validasi - tidak perlu matikan add mode jika layer dinyalakan
     });
     
     document.getElementById('toggleAnalisis').addEventListener('change', function(e) {
+        analisisLayerVisible = e.target.checked;
         if (e.target.checked) {
             map.addLayer(analisisLayer);
         } else {
             map.removeLayer(analisisLayer);
         }
+        // Hapus validasi - tidak perlu matikan add mode jika layer dinyalakan
     });
     
     document.getElementById('toggleSekolah').addEventListener('change', function(e) {
@@ -653,29 +767,62 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('sekolahForm').addEventListener('submit', async function(e) {
         e.preventDefault();
         
-        const formData = {
-            nama_sekolah: document.getElementById('namaSekolah').value.trim(),
-            jenjang: document.getElementById('jenjangSekolah').value,
-            kecamatan: document.getElementById('kecamatanSekolah').value.trim(),
-            fggpdk: parseInt(document.getElementById('fggpdkSekolah').value) || 0,
-            latitude: parseFloat(document.getElementById('latitudeSekolah').value),
-            longitude: parseFloat(document.getElementById('longitudeSekolah').value)
-        };
+        // Disable submit button untuk prevent double submit
+        const submitBtn = document.getElementById('submitBtn');
+        const originalText = submitBtn.textContent;
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Menyimpan...';
         
-        // Validate
-        if (!formData.nama_sekolah || !formData.jenjang) {
-            alert('Nama sekolah dan jenjang wajib diisi!');
-            return;
-        }
-        
-        const id = document.getElementById('sekolahId').value;
-        
-        if (id) {
-            // Update
-            await updateSekolah(parseInt(id), formData);
-        } else {
-            // Create
-            await createSekolah(formData);
+        try {
+            const lat = parseFloat(document.getElementById('latitudeSekolah').value);
+            const lng = parseFloat(document.getElementById('longitudeSekolah').value);
+            
+            // Validate coordinates
+            if (isNaN(lat) || isNaN(lng)) {
+                alert('Koordinat tidak valid!');
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
+                return;
+            }
+            
+            const formData = {
+                nama_sekolah: document.getElementById('namaSekolah').value.trim(),
+                jenjang: document.getElementById('jenjangSekolah').value,
+                kecamatan: document.getElementById('kecamatanSekolah').value.trim(),
+                fggpdk: parseInt(document.getElementById('fggpdkSekolah').value) || 0,
+                latitude: lat,
+                longitude: lng
+            };
+            
+            // Validate
+            if (!formData.nama_sekolah || !formData.jenjang) {
+                alert('Nama sekolah dan jenjang wajib diisi!');
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
+                return;
+            }
+            
+            const id = document.getElementById('sekolahId').value;
+            
+            let success = false;
+            if (id) {
+                // Update
+                success = await updateSekolah(parseInt(id), formData);
+            } else {
+                // Create
+                success = await createSekolah(formData);
+            }
+            
+            if (!success) {
+                // Jika gagal, re-enable button
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
+            }
+        } catch (error) {
+            console.error('Form submit error:', error);
+            alert('Error: ' + error.message);
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalText;
         }
     });
 });

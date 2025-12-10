@@ -166,6 +166,37 @@ Atau jika menggunakan PHP built-in server:
 - `http://localhost:8000/api/get_sekolah.php`
 - `http://localhost:8000/api/get_statistik.php`
 
+## Refresh Database (Update Data)
+
+Jika Anda mengubah data GeoJSON atau ingin mengimpor ulang data:
+
+### Cara 1: Truncate & Re-import (Terminal Laragon)
+```bash
+cd C:\laragon\www\PROJEK_SIG
+
+# Hapus semua data (tapi tetap struktur tabel)
+mysql -u root -e "USE webgis_pendidikan; TRUNCATE TABLE sekolah; TRUNCATE TABLE kecamatan; TRUNCATE TABLE kecamatan_analisis;"
+
+# Import ulang data
+php database\import_geojson.php
+```
+
+### Cara 2: Menggunakan HeidiSQL
+1. Buka HeidiSQL di Laragon
+2. Pilih database `webgis_pendidikan`
+3. Klik kanan setiap tabel → **Empty** (untuk menghapus data)
+4. Import ulang: Jalankan `php database\import_geojson.php` di terminal
+
+### Cara 3: Drop & Recreate (Hapus Database Lengkap)
+```bash
+# Hapus database dan buat ulang
+mysql -u root -e "DROP DATABASE IF EXISTS webgis_pendidikan;"
+mysql -u root < database\schema.sql
+php database\import_geojson.php
+```
+
+**Catatan:** Setelah refresh database, refresh browser (F5) untuk melihat perubahan.
+
 ## Troubleshooting
 
 **Error: "Koneksi gagal"**
@@ -179,6 +210,7 @@ Atau jika menggunakan PHP built-in server:
 **Data tidak muncul**
 - Pastikan import script sudah dijalankan
 - Cek data di database: `SELECT COUNT(*) FROM sekolah;`
+- **Refresh database** jika data sudah diubah (lihat bagian Refresh Database di atas)
 
 **Peta kosong**
 - Cek console browser (F12)

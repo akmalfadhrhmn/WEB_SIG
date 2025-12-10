@@ -2,27 +2,16 @@
 /**
  * API Endpoint: Update Sekolah (Titik Digitasi)
  * Method: PUT
- * 
- * Query Parameters:
- * - id: ID sekolah yang akan diupdate
- * 
- * Request Body (JSON):
- * {
- *   "nama_sekolah": "SMP Negeri 1 Updated",
- *   "jenjang": "Menengah Pertama",
- *   "fggpdk": 12345,
- *   "kecamatan": "RAJABASA",
- *   "latitude": -5.934833,
- *   "longitude": 105.509354
- * }
  */
+
+error_reporting(E_ALL);
+ini_set('display_errors', 0);
 
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: PUT');
 header('Access-Control-Allow-Headers: Content-Type');
 
-// Handle preflight request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
@@ -37,12 +26,24 @@ if ($_SERVER['REQUEST_METHOD'] !== 'PUT') {
     exit;
 }
 
+ob_start();
+
 require_once __DIR__ . '/../config/database.php';
 
-// Get ID from query parameter
+if (!$conn) {
+    ob_end_clean();
+    http_response_code(500);
+    echo json_encode([
+        'error' => true,
+        'message' => 'Database connection failed'
+    ]);
+    exit;
+}
+
 $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
 
 if ($id <= 0) {
+    ob_end_clean();
     http_response_code(400);
     echo json_encode([
         'error' => true,
@@ -51,10 +52,45 @@ if ($id <= 0) {
     exit;
 }
 
-// Get JSON input
-$input = json_decode(file_get_contents('php://input'), true);
+// Get kecamatan lama SEBELUM update
+$old_kecamatan = '';
+$check_query = "SELECT kecamatan FROM sekolah WHERE id = ?";
+$check_stmt = mysqli_prepare($conn, $check_query);
+if ($check_stmt) {
+    mysqli_stmt_bind_param($check_stmt, 'i', $id);
+    mysqli_stmt_execute($check_stmt);
+    $check_result = mysqli_stmt_get_result($check_stmt);
+    if ($check_result && mysqli_num_rows($check_result) > 0) {
+        $old_row = mysqli_fetch_assoc($check_result);
+        $old_kecamatan = $old_row['kecamatan'] ? mysqli_real_escape_string($conn, $old_row['kecamatan']) : '';
+    } else {
+        mysqli_stmt_close($check_stmt);
+        ob_end_clean();
+        http_response_code(404);
+        echo json_encode([
+            'error' => true,
+            'message' => 'Sekolah tidak ditemukan'
+        ]);
+        mysqli_close($conn);
+        exit;
+    }
+    mysqli_stmt_close($check_stmt);
+} else {
+    ob_end_clean();
+    http_response_code(500);
+    echo json_encode([
+        'error' => true,
+        'message' => 'Failed to check sekolah: ' . mysqli_error($conn)
+    ]);
+    mysqli_close($conn);
+    exit;
+}
+
+$raw_input = file_get_contents('php://input');
+$input = json_decode($raw_input, true);
 
 if (!$input) {
+    ob_end_clean();
     http_response_code(400);
     echo json_encode([
         'error' => true,
@@ -63,29 +99,11 @@ if (!$input) {
     exit;
 }
 
-// Check if sekolah exists
-$check_query = "SELECT id FROM sekolah WHERE id = ?";
-$check_stmt = mysqli_prepare($conn, $check_query);
-mysqli_stmt_bind_param($check_stmt, 'i', $id);
-mysqli_stmt_execute($check_stmt);
-$result = mysqli_stmt_get_result($check_stmt);
-
-if (mysqli_num_rows($result) === 0) {
-    http_response_code(404);
-    echo json_encode([
-        'error' => true,
-        'message' => 'Sekolah tidak ditemukan'
-    ]);
-    mysqli_stmt_close($check_stmt);
-    mysqli_close($conn);
-    exit;
-}
-mysqli_stmt_close($check_stmt);
-
 // Validate required fields
 $required = ['nama_sekolah', 'jenjang', 'latitude', 'longitude'];
 foreach ($required as $field) {
-    if (!isset($input[$field]) || empty($input[$field])) {
+    if (!isset($input[$field]) || (is_string($input[$field]) && trim($input[$field]) === '')) {
+        ob_end_clean();
         http_response_code(400);
         echo json_encode([
             'error' => true,
@@ -105,10 +123,11 @@ $longitude = floatval($input['longitude']);
 
 // Validate coordinates
 if ($latitude < -90 || $latitude > 90 || $longitude < -180 || $longitude > 180) {
+    ob_end_clean();
     http_response_code(400);
     echo json_encode([
         'error' => true,
-        'message' => 'Invalid coordinates. Latitude must be between -90 and 90, Longitude between -180 and 180.'
+        'message' => 'Invalid coordinates'
     ]);
     exit;
 }
@@ -116,10 +135,11 @@ if ($latitude < -90 || $latitude > 90 || $longitude < -180 || $longitude > 180) 
 // Validate jenjang
 $valid_jenjang = ['Menengah Pertama', 'Menengah Umum', 'Keagamaan', 'Tinggi', 'Khusus'];
 if (!in_array($jenjang, $valid_jenjang)) {
+    ob_end_clean();
     http_response_code(400);
     echo json_encode([
         'error' => true,
-        'message' => 'Invalid jenjang. Must be one of: ' . implode(', ', $valid_jenjang)
+        'message' => 'Invalid jenjang'
     ]);
     exit;
 }
@@ -130,7 +150,7 @@ $geojson_point = json_encode([
     'coordinates' => [$longitude, $latitude]
 ]);
 
-// Update database
+// Update using prepared statement
 $query = "UPDATE sekolah 
           SET nama_sekolah = ?, 
               jenjang = ?, 
@@ -143,6 +163,7 @@ $query = "UPDATE sekolah
 
 $stmt = mysqli_prepare($conn, $query);
 if (!$stmt) {
+    ob_end_clean();
     http_response_code(500);
     echo json_encode([
         'error' => true,
@@ -156,29 +177,59 @@ mysqli_stmt_bind_param($stmt, 'ssisdssi',
     $nama_sekolah,      // s
     $jenjang,           // s
     $fggpdk,            // i
-    $kecamatan,         // s
-    $latitude,          // d (double)
-    $longitude,         // d (double)
-    $geojson_point,     // s
+    $kecamatan,          // s
+    $latitude,           // d
+    $longitude,          // d
+    $geojson_point,      // s
     $id                  // i
 );
 
-if (mysqli_stmt_execute($stmt)) {
+$result = mysqli_stmt_execute($stmt);
+
+ob_end_clean();
+
+if ($result) {
+    // Update jumlah sekolah di kecamatan_analisis
+    // Kurangi dari kecamatan lama (jika ada dan berbeda)
+    if (!empty($old_kecamatan) && $old_kecamatan != $kecamatan) {
+        $old_kecamatan_escaped = mysqli_real_escape_string($conn, $old_kecamatan);
+        $decrease_query = "UPDATE kecamatan_analisis SET jumlah_sekolah = GREATEST(jumlah_sekolah - 1, 0) WHERE nama_kecamatan = '$old_kecamatan_escaped'";
+        $decrease_result = mysqli_query($conn, $decrease_query);
+        if (!$decrease_result) {
+            error_log("Failed to decrease kecamatan_analisis: " . mysqli_error($conn));
+        }
+    }
+    
+    // Tambah ke kecamatan baru (jika ada dan berbeda dari lama)
+    if (!empty($kecamatan) && $kecamatan != $old_kecamatan) {
+        $kecamatan_escaped = mysqli_real_escape_string($conn, $kecamatan);
+        $increase_query = "UPDATE kecamatan_analisis SET jumlah_sekolah = jumlah_sekolah + 1 WHERE nama_kecamatan = '$kecamatan_escaped'";
+        $increase_result = mysqli_query($conn, $increase_query);
+        if (!$increase_result) {
+            error_log("Failed to increase kecamatan_analisis: " . mysqli_error($conn));
+        }
+    }
+    
+    mysqli_stmt_close($stmt);
+    
     http_response_code(200);
     echo json_encode([
         'success' => true,
         'message' => 'Sekolah berhasil diupdate',
-        'id' => $id
+        'id' => $id,
+        'kecamatan' => $kecamatan
     ]);
 } else {
+    $error_msg = mysqli_stmt_error($stmt);
+    mysqli_stmt_close($stmt);
+    
     http_response_code(500);
     echo json_encode([
         'error' => true,
-        'message' => 'Failed to update: ' . mysqli_error($conn)
+        'message' => 'Failed to update: ' . $error_msg
     ]);
 }
 
-mysqli_stmt_close($stmt);
 mysqli_close($conn);
+exit;
 ?>
-

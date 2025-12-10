@@ -160,8 +160,13 @@ function importSekolah($conn, $filePath) {
         
         $jenjang = mysqli_real_escape_string($conn, $jenjang);
         
-        // Extract kecamatan from nama (jika ada) atau set null
-        $kecamatan = 'NULL';
+        // Extract kecamatan from NAMOBJ_2 property
+        $kecamatan_raw = $properties['NAMOBJ_2'] ?? '';
+        if (!empty($kecamatan_raw)) {
+            $kecamatan = "'" . mysqli_real_escape_string($conn, $kecamatan_raw) . "'";
+        } else {
+            $kecamatan = 'NULL';
+        }
         
         // Get coordinates (sudah dibersihkan dari elevation)
         $coordinates = $geometry['coordinates'] ?? [];
@@ -225,4 +230,3 @@ echo "========================================\n";
 
 mysqli_close($conn);
 ?>
-

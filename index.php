@@ -56,7 +56,7 @@
     <!-- Main Container -->
     <div class="flex h-[calc(100vh-80px)]">
         <!-- Sidebar -->
-        <aside class="w-80 bg-dark-blue-800 border-r border-dark-blue-700 overflow-y-auto">
+        <aside class="w-96 bg-dark-blue-800 border-r border-dark-blue-700 overflow-y-auto">
             <div class="p-4 space-y-4">
                 <!-- Filter Section -->
                 <div class="bg-dark-blue-700 rounded-lg p-4 border border-dark-blue-600">
@@ -228,23 +228,20 @@
                 </div>
                 
                 <div>
-                    <label class="block text-sm font-medium text-gray-300 mb-1">Kecamatan</label>
-                    <input 
-                        type="text" 
-                        id="kecamatanSekolah" 
-                        name="kecamatan"
-                        class="w-full px-3 py-2 bg-dark-blue-900 border border-dark-blue-600 rounded-md text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-medium text-gray-300 mb-1">FGGPDK</label>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">
+                        Kode Identifikasi Sekolah
+                        <span class="text-xs text-gray-400 font-normal">(Opsional)</span>
+                    </label>
                     <input 
                         type="number" 
                         id="fggpdkSekolah" 
                         name="fggpdk"
-                        class="w-full px-3 py-2 bg-dark-blue-900 border border-dark-blue-600 rounded-md text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Masukkan kode identifikasi (jika ada)"
+                        class="w-full px-3 py-2 bg-dark-blue-900 border border-dark-blue-600 rounded-md text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
+                    <p class="text-xs text-gray-400 mt-1">
+                        Kode identifikasi unik untuk sekolah (biasanya dari sistem administrasi pendidikan)
+                    </p>
                 </div>
                 
                 <div class="grid grid-cols-2 gap-4">
@@ -270,6 +267,20 @@
                             class="w-full px-3 py-2 bg-dark-blue-900 border border-dark-blue-600 rounded-md text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
                     </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">Kecamatan</label>
+                    <select 
+                        id="kecamatanSekolah" 
+                        name="kecamatan"
+                        class="w-full px-3 py-2 bg-dark-blue-900 border border-dark-blue-600 rounded-md text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                        <option value="">Pilih Kecamatan</option>
+                    </select>
+                    <p class="text-xs text-gray-400 mt-1">
+                        Pilih kecamatan tempat sekolah berada
+                    </p>
                 </div>
                 
                 <div class="flex space-x-3 pt-4">
