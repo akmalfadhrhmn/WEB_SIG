@@ -62,7 +62,7 @@
 }
 ```
 
-**Hubungan dengan file lain:**
+**Hubungan dengn file lain:**
 - **Database:** Tabel `kecamatan_analisis`
 - **Frontend:** `assets/js/map.js` → `analisisLayer`
 - **Data source:** `data/jumlahsekolahkecamatan.geojson` (diimport via `database/import_geojson.php`)
